@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDD Command Center</title>
+    
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #d40511; /* DHL Red */
+            --primary-dark: #b0040e;
+            --secondary: #1f2937; /* Dark Gray */
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --success: #16a34a;
+            --danger: #dc2626;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--secondary);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* --- Animations --- */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade { animation: fadeIn 0.5s ease-out forwards; }
+
+        /* --- Modern Card Styling --- */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+            border-radius: 16px;
+        }
+
+        /* --- Metric Cards --- */
+        .metric-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 16px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            background: white;
+            border: 1px solid #f0f0f0;
+        }
+        .metric-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+        
+        .metric-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: #6b7280; }
+        .metric-value { font-size: 2rem; font-weight: 800; margin-top: 5px; color: #111827; }
+        
+        /* Gradients for KPI borders/accents */
+        .accent-red { border-bottom: 4px solid var(--primary); }
+        .accent-green { border-bottom: 4px solid var(--success); }
+        .accent-blue { border-bottom: 4px solid #3b82f6; }
+
+        /* --- Table Design --- */
+        .modern-table-container {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            background: white;
+            border: 1px solid #e5e7eb;
+        }
+        
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        
+        th { 
+            background: #111827; 
+            color: white; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            font-size: 0.75rem; 
+            letter-spacing: 0.05em;
+            padding: 16px; 
+            position: sticky; top: 0; z-index: 20;
+        }
+        
+        td { 
+            padding: 12px 16px; 
+            border-bottom: 1px solid #f3f4f6; 
+            font-size: 0.875rem; 
+            color: #374151;
+            transition: background 0.1s;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background-color: #f9fafb; }
+
+        /* Sticky Columns */
+        th:first-child, td:first-child {
+            position: sticky; left: 0; z-index: 30;
+            background: #f9fafb;
+            border-right: 2px solid #e5e7eb;
+            font-weight: 700;
+            color: #111827;
+        }
+        th:first-child { background: var(--primary); color: white; border-right: 2px solid #991b1b; z-index: 40; }
+
+        /* Performance Colors */
+        .badge-pass { background: #dcfce7; color: #15803d; padding: 4px 8px; border-radius: 6px; font-weight: 700; display: inline-block; min-width: 60px; text-align: center; }
+        .badge-fail { background: #fee2e2; color: #b91c1c; padding: 4px 8px; border-radius: 6px; font-weight: 700; display: inline-block; min-width: 60px; text-align: center; }
+
+        /* --- Buttons --- */
+        .btn-modern {
+            background: #1f2937; color: white;
+            padding: 10px 20px; border-radius: 8px;
+            font-weight: 600; font-size: 0.9rem;
+            transition: all 0.2s; border: none; cursor: pointer;
+            display: inline-flex; items-center; gap: 8px;
+        }
+        .btn-modern:hover { background: #374151; transform: translateY(-1px); }
+        
+        .btn-primary { background: var(--primary); }
+        .btn-primary:hover { background: var(--primary-dark); }
+
+        .btn-tab {
+            background: transparent; color: #6b7280;
+            padding: 8px 16px; border-radius: 8px;
+            font-weight: 600; cursor: pointer;
+            transition: all 0.2s; border: 1px solid transparent;
+        }
+        .btn-tab.active { background: white; color: var(--primary); border-color: #e5e7eb; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+
+        /* --- Drill Down Modal --- */
+        #drillDownSection {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: white; border-top-left-radius: 20px; border-top-right-radius: 20px;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.15);
+            z-index: 100; max-height: 80vh; display: flex; flex-direction: column;
+            transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #drillDownSection.open { transform: translateY(0); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        /* Loading Overlay for Export/Import */
+        #globalLoading {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999;
+            display: flex; justify-content: center; items-center; color: white;
+            flex-direction: column; gap: 10px; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        #globalLoading.active { opacity: 1; pointer-events: all; }
+    </style>
+</head>
+<body class="p-6 md:p-10">
+
+    <div id="globalLoading">
+        <i class="fas fa-circle-notch fa-spin text-4xl"></i>
+        <div class="font-bold" id="loadingText">Processing...</div>
+    </div>
+
+    <div class="max-w-7xl mx-auto mb-10 flex flex-col md:flex-row justify-between items-end gap-6 animate-fade">
+        <div>
+            <div class="flex items-center gap-3 mb-2">
+                <div class="bg-red-600 text-white p-2 rounded-lg"><i class="fas fa-shipping-fast text-xl"></i></div>
+                <h1 class="text-3xl font-bold tracking-tight text-gray-900">RDD Command Center</h1>
+            </div>
+            <p class="text-gray-500 font-medium">Performance Analytics & Intelligence</p>
+        </div>
+        
+        <div class="flex gap-3">
+            <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls, .csv" />
+            <label for="fileInput" class="btn-modern btn-primary shadow-lg shadow-red-200">
+                <i class="fas fa-cloud-upload-alt"></i> Upload Data
+            </label>
+        </div>
+    </div>
+
+    <div id="dashboardInterface" class="hidden max-w-7xl mx-auto space-y-8 animate-fade">
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div class="metric-card accent-blue">
+                <div class="metric-label">Total Shipments</div>
+                <div class="metric-value" id="sumTotal">0</div>
+                <div class="text-xs text-blue-600 font-bold mt-2">100% Volume</div>
+            </div>
+            <div class="metric-card accent-green">
+                <div class="metric-label">Global RDD %</div>
+                <div class="metric-value" id="sumPerf">0%</div>
+                <div class="text-xs text-gray-400 mt-2">Target: 96%</div>
+            </div>
+            <div class="metric-card accent-green">
+                <div class="metric-label">Successful RDD</div>
+                <div class="metric-value text-green-700" id="sumRDD">0</div>
+                <div class="text-xs text-green-600 font-bold mt-2"><i class="fas fa-check-circle"></i> On Time</div>
+            </div>
+            <div class="metric-card accent-red">
+                <div class="metric-label">Failures</div>
+                <div class="metric-value text-red-600" id="sumFail">0</div>
+                <div class="text-xs text-red-500 font-bold mt-2"><i class="fas fa-exclamation-triangle"></i> Action Needed</div>
+            </div>
+            <div class="metric-card accent-red">
+                <div class="metric-label">Impact (MA %)</div>
+                <div class="metric-value text-red-800" id="sumImpact">0%</div>
+                <div class="text-xs text-gray-400 mt-2">Of Global Volume</div>
+            </div>
+        </div>
+
+        <div class="glass-panel p-6">
+            <div class="flex flex-col xl:flex-row justify-between gap-6 items-center">
+                
+                <div class="flex flex-wrap gap-4 w-full xl:w-auto">
+                    <div class="relative group">
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Route</label>
+                        <select id="filterRoute" onchange="renderTable()" class="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-48 p-2.5 font-semibold"></select>
+                    </div>
+                    <div class="relative group">
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Facility</label>
+                        <select id="filterFacility" onchange="renderTable()" class="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-48 p-2.5 font-semibold"></select>
+                    </div>
+                    <div class="relative group">
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Sector</label>
+                        <select id="filterSector" onchange="renderTable()" class="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-48 p-2.5 font-semibold"></select>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 border-l pl-6 border-gray-200">
+                    <button onclick="exportPNG()" class="btn-modern bg-gray-800 text-xs"><i class="fas fa-camera"></i> PNG</button>
+                    <button onclick="exportPDF()" class="btn-modern bg-red-700 text-xs"><i class="fas fa-file-pdf"></i> PDF</button>
+                    <button onclick="exportExcelMain()" class="btn-modern bg-green-700 text-xs"><i class="fas fa-file-excel"></i> Excel</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1 glass-panel p-5 h-full">
+                <div class="flex justify-between items-center mb-4 pb-4 border-b border-gray-100">
+                    <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                        <span class="w-2 h-6 bg-red-600 rounded-full"></span>
+                        Missed Target
+                    </h3>
+                    <span id="missedCount" class="bg-red-100 text-red-700 text-xs font-bold px-3 py-1 rounded-full">0</span>
+                </div>
+                <div class="overflow-y-auto max-h-[500px] pr-2 space-y-2" id="missedTargetList">
+                    </div>
+            </div>
+
+            <div class="lg:col-span-2 space-y-4">
+                
+                <div class="flex justify-between items-center bg-gray-100 p-1.5 rounded-lg max-w-md">
+                    <button onclick="switchView('route')" id="btn-route" class="btn-tab active flex-1">Route</button>
+                    <button onclick="switchView('facility')" id="btn-facility" class="btn-tab flex-1">Facility</button>
+                    <button onclick="switchView('sector')" id="btn-sector" class="btn-tab flex-1">Sector</button>
+                </div>
+
+                <div class="flex justify-end">
+                    <select id="sortOption" onchange="renderTable()" class="bg-transparent text-xs font-bold text-gray-500 border-none focus:ring-0 cursor-pointer">
+                        <option value="vol">Sort: Volume (High to Low)</option>
+                        <option value="best">Sort: Performance (Best)</option>
+                        <option value="worst">Sort: Performance (Worst)</option>
+                    </select>
+                </div>
+
+                <div class="modern-table-container max-h-[600px] overflow-auto" id="captureArea">
+                    <table id="rddTable">
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                        <tfoot id="tableFoot"></tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="drillDownSection">
+        <div class="p-6 bg-gray-900 text-white flex justify-between items-center">
+            <div>
+                <h2 class="text-xl font-bold" id="drillTitle">Details</h2>
+                <p class="text-sm text-gray-400" id="drillSubtitle">Drill down view</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="downloadDrillDown()" class="px-4 py-2 bg-green-600 rounded-lg font-bold text-sm hover:bg-green-500 transition"><i class="fas fa-download"></i> Export Data</button>
+                <button onclick="closeDrillDown()" class="px-4 py-2 bg-gray-700 rounded-lg font-bold text-sm hover:bg-gray-600 transition">Close</button>
+            </div>
+        </div>
+        <div class="flex-1 overflow-auto p-0 bg-white">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th class="p-4 text-xs text-gray-500">Waybill</th>
+                        <th class="p-4 text-xs text-gray-500">Route</th>
+                        <th class="p-4 text-xs text-gray-500">Facility</th>
+                        <th class="p-4 text-xs text-gray-500">Origin</th>
+                        <th class="p-4 text-xs text-gray-500">Dest</th>
+                        <th class="p-4 text-xs text-gray-500">Incident</th>
+                        <th class="p-4 text-xs text-gray-500">Arrival</th>
+                    </tr>
+                </thead>
+                <tbody id="drillBody" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // --- LOGIC CORE ---
+        let rawData = [];
+        let currentView = 'route'; 
+        let currentDrillData = []; 
+        let currentStatsArray = []; // For Export
+        const TARGET_PCT = 96.0;
+
+        // Columns
+        const COL_ROUTE = "Responsible Rout";
+        const COL_FACILITY = "Responsible STA-FAC";
+        const COL_SECTOR = "Route"; 
+        const COL_INCIDENT = "Incident  Ckp2"; 
+        const COL_WAYBILL = "Waybill Number";
+        const COL_ORIGIN = "Origin Station Code";
+        const COL_DEST = "Dest Station Code";
+        const COL_ARRIVAL = "Arrival Date"; 
+
+        // 1. Initial Load & Utilities
+        document.getElementById('fileInput').addEventListener('change', handleFile);
+
+        function toggleLoader(show, msg = "Processing...") {
+            const el = document.getElementById('globalLoading');
+            document.getElementById('loadingText').innerText = msg;
+            if(show) el.classList.add('active');
+            else el.classList.remove('active');
+        }
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            // Show Loading Indicator Immediately
+            toggleLoader(true, "Parsing Data...");
+
+            // Use setTimeout to allow UI to render the loader before blocking with heavy parsing
+            setTimeout(() => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        let json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {defval: ""});
+                        
+                        // Clean Data (NA -> NDR, Unknown -> "")
+                        rawData = json.map(row => {
+                            const clean = (val) => {
+                                if(!val) return "";
+                                let s = val.toString().trim();
+                                if(s.toUpperCase() === "NA") return "NDR";
+                                if(s.toUpperCase() === "UNKNOWN") return "";
+                                return s;
+                            };
+                            row[COL_ROUTE] = clean(row[COL_ROUTE]);
+                            row[COL_FACILITY] = clean(row[COL_FACILITY]);
+                            row[COL_SECTOR] = clean(row[COL_SECTOR]);
+                            return row;
+                        });
+                        
+                        populateFilters();
+                        document.getElementById('dashboardInterface').classList.remove('hidden');
+                        renderTable();
+                    } catch (err) {
+                        alert("Error parsing file. Please check format.");
+                        console.error(err);
+                    } finally {
+                        toggleLoader(false);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }, 100);
+        }
+
+        // 2. Filters
+        function populateFilters() {
+            let routes = new Set(), facilities = new Set(), sectors = new Set();
+            rawData.forEach(row => {
+                if(row[COL_ROUTE]) routes.add(row[COL_ROUTE]);
+                if(row[COL_FACILITY]) facilities.add(row[COL_FACILITY]);
+                if(row[COL_SECTOR]) sectors.add(row[COL_SECTOR]);
+            });
+            fillSelect('filterRoute', routes);
+            fillSelect('filterFacility', facilities);
+            fillSelect('filterSector', sectors);
+        }
+
+        function fillSelect(id, set) {
+            const select = document.getElementById(id);
+            select.innerHTML = '<option value="All">All</option>';
+            Array.from(set).sort().forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.innerText = val;
+                select.appendChild(opt);
+            });
+        }
+
+        function switchView(viewName) {
+            currentView = viewName;
+            document.querySelectorAll('.btn-tab').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-${viewName}`).classList.add('active');
+            renderTable();
+            closeDrillDown();
+        }
+
+        // 3. Render Logic
+        function renderTable() {
+            if (!rawData.length) return;
+
+            const filterR = document.getElementById('filterRoute').value;
+            const filterF = document.getElementById('filterFacility').value;
+            const filterS = document.getElementById('filterSector').value;
+            const sortMode = document.getElementById('sortOption').value;
+
+            // Incident Headers
+            let incidentTypes = new Set();
+            let fileTotalRows = 0;
+            rawData.forEach(row => {
+                 let inc = (row[COL_INCIDENT] || "").toString().trim();
+                 if(inc === "") inc = "Unknown";
+                 incidentTypes.add(inc);
+                 fileTotalRows++;
+            });
+            let incidentCols = Array.from(incidentTypes).sort((a, b) => {
+                if(a === "Right DD") return -1;
+                if(b === "Right DD") return 1;
+                return a.localeCompare(b);
+            });
+
+            // Aggregate
+            let groupedStats = {};
+            let footerStats = { total: 0, incidents: {}, fails: 0 };
+            incidentCols.forEach(t => footerStats.incidents[t] = 0);
+            let visibleTotal = 0;
+
+            rawData.forEach(row => {
+                let r = row[COL_ROUTE];
+                let f = row[COL_FACILITY];
+                let s = row[COL_SECTOR];
+                let inc = (row[COL_INCIDENT] || "").toString().trim();
+                if(inc === "") inc = "Unknown";
+
+                if (filterR !== "All" && r !== filterR) return;
+                if (filterF !== "All" && f !== filterF) return;
+                if (filterS !== "All" && s !== filterS) return;
+
+                visibleTotal++;
+
+                let key = "Unknown";
+                let extra = {}; 
+                if (currentView === 'route') { key = r || "(Blank)"; extra.fac = f; extra.sec = s; }
+                else if (currentView === 'facility') { key = f || "(Blank)"; }
+                else if (currentView === 'sector') { key = s || "(Blank)"; }
+
+                if (!groupedStats[key]) {
+                    groupedStats[key] = { total: 0, incidents: {}, extra: extra };
+                    incidentCols.forEach(t => groupedStats[key].incidents[t] = 0);
+                }
+
+                groupedStats[key].total++;
+                groupedStats[key].incidents[inc]++;
+                footerStats.total++;
+                footerStats.incidents[inc]++;
+            });
+
+            // Update KPI
+            const sumRightDD = footerStats.incidents["Right DD"] || 0;
+            const sumFail = footerStats.total - sumRightDD;
+            const sumPerf = visibleTotal > 0 ? (sumRightDD / visibleTotal) * 100 : 0;
+            const sumImpact = fileTotalRows > 0 ? (sumFail / fileTotalRows) * 100 : 0;
+
+            document.getElementById('sumTotal').innerText = visibleTotal.toLocaleString();
+            document.getElementById('sumRDD').innerText = sumRightDD.toLocaleString();
+            document.getElementById('sumFail').innerText = sumFail.toLocaleString();
+            document.getElementById('sumImpact').innerText = sumImpact.toFixed(2) + "%";
+            
+            const kpiPerf = document.getElementById('sumPerf');
+            kpiPerf.innerText = sumPerf.toFixed(2) + "%";
+            kpiPerf.style.color = sumPerf >= TARGET_PCT ? "var(--success)" : "var(--danger)";
+
+            // Prepare Data Array
+            let statsArray = Object.keys(groupedStats).map(key => {
+                let stats = groupedStats[key];
+                let rightDD = stats.incidents["Right DD"] || 0;
+                let perf = stats.total > 0 ? (rightDD / stats.total) * 100 : 0;
+                return { key, ...stats, perf };
+            });
+
+            // Sort
+            statsArray.sort((a, b) => {
+                if (sortMode === 'best') return b.perf - a.perf;
+                if (sortMode === 'worst') return a.perf - b.perf;
+                return b.total - a.total; 
+            });
+            currentStatsArray = statsArray; // Save for export
+
+            // Missed List
+            renderMissedList(statsArray.filter(item => item.perf < TARGET_PCT).sort((a, b) => a.perf - b.perf));
+
+            // Render Table
+            const thead = document.getElementById('tableHead');
+            let headerHTML = "<tr>";
+            if (currentView === 'route') headerHTML += `<th style="min-width: 120px;">Route</th><th style="background:#1f2937">Facility</th><th style="background:#1f2937">Sector</th>`;
+            else if (currentView === 'facility') headerHTML += `<th>Facility</th>`;
+            else headerHTML += `<th>Sector</th>`;
+
+            incidentCols.forEach(col => headerHTML += `<th>${col}</th>`);
+            headerHTML += `<th style="background:#374151">Total</th><th style="background:#374151">Fails</th><th style="background:#374151">Impact %</th><th style="background:#374151">RDD %</th></tr>`;
+            thead.innerHTML = headerHTML;
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = "";
+
+            if(statsArray.length === 0) tbody.innerHTML = `<tr><td colspan="100" class="text-center p-8 text-gray-400">No data available</td></tr>`;
+
+            statsArray.forEach(row => {
+                let rightDD = row.incidents["Right DD"] || 0;
+                let fails = row.total - rightDD;
+                let impact = fileTotalRows > 0 ? (fails / fileTotalRows) * 100 : 0;
+                let badgeClass = row.perf >= TARGET_PCT ? "badge-pass" : "badge-fail";
+                let safeKey = row.key.replace(/'/g, "\\'");
+
+                let rowHTML = `<td class="font-bold text-gray-800">${row.key}</td>`;
+                if (currentView === 'route') rowHTML += `<td>${row.extra.fac}</td><td>${row.extra.sec}</td>`;
+
+                incidentCols.forEach(col => {
+                    let val = row.incidents[col];
+                    rowHTML += `<td class="cursor-pointer hover:text-blue-600 hover:font-bold" onclick="showDrillDown('${safeKey}', 'INCIDENT', '${col}')">${val === 0 ? '<span class="text-gray-200">-</span>' : val}</td>`;
+                });
+
+                rowHTML += `
+                    <td class="font-bold bg-gray-50 cursor-pointer" onclick="showDrillDown('${safeKey}', 'TOTAL', '')">${row.total}</td>
+                    <td class="font-bold text-red-600 bg-red-50 cursor-pointer" onclick="showDrillDown('${safeKey}', 'FAIL', '')">${fails}</td>
+                    <td class="text-gray-500">${impact.toFixed(2)}%</td>
+                    <td><span class="${badgeClass}">${row.perf.toFixed(2)}%</span></td>
+                `;
+                tbody.appendChild(document.createElement('tr')).innerHTML = rowHTML;
+            });
+
+            // Footer
+            const tfoot = document.getElementById('tableFoot');
+            let footerRightDD = footerStats.incidents["Right DD"] || 0;
+            let footerFails = footerStats.total - footerRightDD;
+            let globalImpact = fileTotalRows > 0 ? (footerFails / fileTotalRows) * 100 : 0; 
+            let globalRDD = footerStats.total > 0 ? (footerRightDD / footerStats.total) * 100 : 0;
+            let colSpan = (currentView === 'route') ? 3 : 1;
+
+            let footerHTML = `<tr><td colspan="${colSpan}" class="text-center">TOTAL</td>`;
+            incidentCols.forEach(col => footerHTML += `<td>${footerStats.incidents[col]}</td>`);
+            footerHTML += `<td>${footerStats.total}</td><td class="text-red-300">${footerFails}</td><td>${globalImpact.toFixed(2)}%</td><td>${globalRDD.toFixed(2)}%</td></tr>`;
+            tfoot.innerHTML = footerHTML;
+        }
+
+        function renderMissedList(items) {
+            const container = document.getElementById('missedTargetList');
+            document.getElementById('missedCount').innerText = items.length;
+            container.innerHTML = "";
+            if (items.length === 0) {
+                container.innerHTML = "<div class='text-green-500 text-sm font-medium p-4 text-center'>✨ Perfect! All targets met.</div>";
+                return;
+            }
+            items.forEach((item) => {
+                container.innerHTML += `
+                    <div class="flex justify-between items-center p-3 bg-red-50 rounded-lg hover:bg-red-100 transition">
+                        <span class="font-bold text-gray-700 text-sm">${item.key}</span>
+                        <div class="text-right">
+                            <div class="text-red-600 font-bold text-sm">${item.perf.toFixed(2)}%</div>
+                            <div class="text-[10px] text-gray-400">${item.total} Shp</div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        // 4. Drill Down
+        function showDrillDown(key, type, specificIncident) {
+            const filterR = document.getElementById('filterRoute').value;
+            const filterF = document.getElementById('filterFacility').value;
+            const filterS = document.getElementById('filterSector').value;
+            let compareKey = key === "(Blank)" ? "" : key;
+
+            currentDrillData = rawData.filter(row => {
+                let r = row[COL_ROUTE], f = row[COL_FACILITY], s = row[COL_SECTOR];
+                let inc = (row[COL_INCIDENT] || "").toString().trim() || "Unknown";
+
+                if (filterR !== "All" && r !== filterR) return false;
+                if (filterF !== "All" && f !== filterF) return false;
+                if (filterS !== "All" && s !== filterS) return false;
+
+                if (currentView === 'route' && r !== compareKey) return false;
+                if (currentView === 'facility' && f !== compareKey) return false;
+                if (currentView === 'sector' && s !== compareKey) return false;
+
+                if (type === 'FAIL' && inc === "Right DD") return false;
+                if (type === 'INCIDENT' && inc !== specificIncident) return false;
+                return true;
+            });
+
+            document.getElementById('drillTitle').innerText = `${key} • ${type === 'FAIL' ? 'Failures' : (type === 'INCIDENT' ? specificIncident : 'All')}`;
+            document.getElementById('drillSubtitle').innerText = `${currentDrillData.length} records found`;
+            
+            const tbody = document.getElementById('drillBody');
+            tbody.innerHTML = "";
+            currentDrillData.slice(0, 100).forEach(row => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-blue-50">
+                        <td class="p-4 font-mono text-gray-600">${row[COL_WAYBILL] || '-'}</td>
+                        <td class="p-4">${row[COL_ROUTE]}</td>
+                        <td class="p-4">${row[COL_FACILITY]}</td>
+                        <td class="p-4">${row[COL_ORIGIN]}</td>
+                        <td class="p-4">${row[COL_DEST]}</td>
+                        <td class="p-4 font-bold ${row[COL_INCIDENT] === 'Right DD' ? 'text-green-600' : 'text-red-600'}">${row[COL_INCIDENT] || '-'}</td>
+                        <td class="p-4">${row[COL_ARRIVAL] || '-'}</td>
+                    </tr>`;
+            });
+            document.getElementById('drillDownSection').classList.add('open');
+        }
+
+        function closeDrillDown() { document.getElementById('drillDownSection').classList.remove('open'); }
+        function downloadDrillDown() {
+            if (!currentDrillData.length) return;
+            const ws = XLSX.utils.json_to_sheet(currentDrillData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Details");
+            XLSX.writeFile(wb, "DrillDown_Details.xlsx");
+        }
+
+        // 5. EXPORT FUNCTIONS (AUTOSCALE WIDTH & HEIGHT)
+        
+        // Helper: Prepares the table for full capture by removing scrollbars temporarily
+        async function getTableCanvas() {
+            const tableContainer = document.getElementById('captureArea');
+            const table = document.getElementById('rddTable');
+            
+            // Show loading
+            toggleLoader(true, "Generating Report...");
+
+            // 1. Save original styles
+            const originalMaxHeight = tableContainer.style.maxHeight;
+            const originalOverflow = tableContainer.style.overflow;
+            const originalWidth = tableContainer.style.width;
+            
+            // 2. Expand to full size (Height AND Width)
+            // Remove scroll limits
+            tableContainer.style.maxHeight = 'none';
+            tableContainer.style.overflow = 'visible';
+            
+            // FORCE width to fit all content (Columns fix)
+            // We set width to 'fit-content' or the scrollWidth of the inner table to ensure nothing is cut off
+            tableContainer.style.width = table.scrollWidth + "px"; 
+            
+            // 3. Capture with high scale for clarity
+            try {
+                const canvas = await html2canvas(tableContainer, { 
+                    scale: 2, // 2x resolution for crisp text
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff',
+                    windowWidth: table.scrollWidth // Hint to html2canvas about the size
+                });
+                
+                // 4. Restore styles
+                tableContainer.style.maxHeight = originalMaxHeight;
+                tableContainer.style.overflow = originalOverflow;
+                tableContainer.style.width = originalWidth;
+                toggleLoader(false);
+                
+                return canvas;
+            } catch (err) {
+                console.error(err);
+                tableContainer.style.maxHeight = originalMaxHeight;
+                tableContainer.style.overflow = originalOverflow;
+                tableContainer.style.width = originalWidth;
+                toggleLoader(false);
+                alert("Error generating image.");
+                return null;
+            }
+        }
+
+        // Export PNG (Visual - Autoscaled)
+        async function exportPNG() {
+            const canvas = await getTableCanvas();
+            if(!canvas) return;
+
+            const link = document.createElement('a');
+            link.download = 'RDD_Report_Full.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        // Export PDF (Visual - Autoscaled)
+        async function exportPDF() {
+            const canvas = await getTableCanvas();
+            if(!canvas) return;
+
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            
+            // Get Canvas dimensions
+            const imgWidthPx = canvas.width;
+            const imgHeightPx = canvas.height;
+            
+            // Define Standard PDF Page (Landscape A4)
+            const pdfPageWidth = 297; // mm
+            const pdfPageHeight = 210; // mm
+            const margin = 10;
+            const usableWidth = pdfPageWidth - (margin * 2);
+            
+            // Calculate Scaled Height based on fitting the width
+            // This ensures all columns fit within the page width
+            const scaledHeight = (imgHeightPx * usableWidth) / imgWidthPx;
+            
+            // Logic: If the content is taller than a single A4 page, create a custom page height.
+            let doc;
+            
+            if (scaledHeight > (pdfPageHeight - 20)) {
+                // Custom Height PDF (Long Scroll)
+                doc = new jsPDF({
+                    orientation: 'l',
+                    unit: 'mm',
+                    format: [pdfPageWidth, scaledHeight + 40] // Add buffer for header/margins
+                });
+            } else {
+                // Standard A4
+                doc = new jsPDF('l', 'mm', 'a4');
+            }
+            
+            // Header
+            doc.setFontSize(16);
+            doc.setTextColor(20, 20, 20);
+            doc.text("RDD Weekly Performance Report", margin, 15);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text("Generated via RDD Command Center", margin, 22);
+
+            // Add Image
+            doc.addImage(imgData, 'PNG', margin, 30, usableWidth, scaledHeight);
+            
+            doc.save('RDD_Report_Autoscale.pdf');
+        }
+
+        // Export Excel (Data Optimized)
+        function exportExcelMain() {
+            if(!currentStatsArray.length) return alert("No data to export");
+            toggleLoader(true, "Exporting Excel...");
+
+            setTimeout(() => {
+                // Build Data Array for Excel
+                let exportData = currentStatsArray.map(item => {
+                    let row = {};
+                    // Determine Key Name
+                    if(currentView === 'route') { row["Route"] = item.key; row["Facility"] = item.extra.fac; row["Sector"] = item.extra.sec; }
+                    else if(currentView === 'facility') { row["Facility"] = item.key; }
+                    else { row["Sector"] = item.key; }
+
+                    // Incidents
+                    Object.keys(item.incidents).forEach(inc => {
+                        row[inc] = item.incidents[inc];
+                    });
+
+                    // Maths
+                    row["Total"] = item.total;
+                    row["Fails"] = item.total - (item.incidents["Right DD"] || 0);
+                    row["RDD %"] = (item.perf / 100); // Export as decimal for Excel formatting
+                    return row;
+                });
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "RDD_Summary");
+                XLSX.writeFile(wb, "RDD_Summary_Report.xlsx");
+                
+                toggleLoader(false);
+            }, 100);
+        }
+
+    </script>
+</body>
+</html>
